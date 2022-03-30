@@ -60,7 +60,10 @@ def handle_input(inputs):
                             input["prev_out"]["addr"])
                         second_hash[input["prev_out"]["addr"]
                                     ] = inputs[input_i]["prev_out"]["addr"]
-                break
+                # break
+                r = inputs[input_i]["prev_out"]["addr"]
+                # print(f"returning {r}")
+                return r
             elif (case_1 == False and inputs[input_i]["prev_out"]["addr"] in second_hash):
                 case_2 = True
             elif (case_1 == False and case_2 == False):
@@ -78,21 +81,35 @@ def handle_input(inputs):
                         (main_hash[main_table_key]).append(temp)
                         second_hash[temp] = temp_input_list[temp_index]
                 break
+        # print(f"returning {second_hash[temp_input_list[0]]}")
+        return second_hash[temp_input_list[0]]
     elif (case_1 == False and case_2 == False and case_3 == True):
         # one will be the main, add them accordinly to both tables
         # print("case 3")
         main_key = temp_input_list[0]
         main_hash[main_key] = []
+        # print(f"len = {len(temp_input_list)}")
         for temp_index in range(1, len(temp_input_list)):
+            # print(f"3>> {temp_index}")
             second_hash[temp_input_list[temp_index]] = main_key
             (main_hash[main_key]).append(temp_input_list[temp_index])
+        # print(f"returning {main_key}")
+        return main_key
 
-    return next(iter(main_hash))
+    # r = next(iter(main_hash))
+    # print(f"returning {r}")
+    # return r
 
 
 def handle_output(outputs, input):
     final_outputs = []
+    # print(f"length of outputs = {len(outputs)}")
+    if len(outputs) > 1200:  # TODO more ram required for this
+        return None
+    # i_counter = 1
     for output in outputs:
+        # print(f"i = {i_counter}")
+        # i_counter += 1
         if "addr" in output:
             if output["addr"] in second_hash:
                 addr = second_hash[output["addr"]]
@@ -164,6 +181,7 @@ for day in range(pastNDays):
 
                 if simplified_inputs != None:
                     to_insert_output = True
+                    print(each_transaction["hash"])
                     outputs = handle_output(
                         each_transaction["out"], simplified_inputs)
 
@@ -172,7 +190,7 @@ for day in range(pastNDays):
                 #         to_insert_output = True
                 #         outputs.append(
                 #             {"value": (out["value"] / 100000000), "addr": out["addr"]})
-                if to_insert_input and to_insert_output:
+                if to_insert_input and to_insert_output and outputs != None:
                     for output in outputs:
                         dict = {"hash": each_transaction["hash"], "time": each_transaction["time"],
                                 "sender": simplified_inputs, "receiver": output["addr"], "value": output["value"]}
@@ -180,8 +198,8 @@ for day in range(pastNDays):
                     # dict = {"hash": each_transaction["hash"],"time": each_transaction["time"], "sender":inputs, "receivers":outputs}
                     # if each_transaction["hash"] == "293a5e6c0eea9ed493c5982f638b15b9d669d1c5304424024f7c1a04f605b429":
 
-                        # print(json.dumps(dict))
-                        # print("\n--------\n")
+                        print(json.dumps(dict))
+                        print("\n--------\n")
                         # TODO append to the main dataset
                         i = "merge (a1: Address{addr:\"" + str(dict["sender"]) + "\"})\n merge (a2: Address{addr:\"" + str(dict["receiver"]) + "\"})\n merge (a1) -[:SENDS{timestamp: \"" + str(
                             dict["time"]) + "\", amount: \""+str(dict["value"])+"\", hash: \"" + str(dict["hash"]) + "\", source: \"" + str(dict["sender"]) + "\", target: \"" + str(dict["receiver"]) + "\"}]-> (a2)"
