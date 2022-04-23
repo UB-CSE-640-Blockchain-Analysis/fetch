@@ -7,10 +7,22 @@ import csv
 """
     database connection
 """
-CONN = psycopg2.connect(database="cse640",
+CONN = psycopg2.connect(database="test",
                         host="127.0.0.1", port="5400")
 print("Opened database successfully")
 CURSOR = CONN.cursor()
+
+def shutdown_gracefully(store_config, particular_day=None, block_index=None, transaction_index=None, fetch_start_day=None):
+    if store_config:
+        CURSOR.execute(f"select particular_day_seconds from history limit 1;")
+        stored_day = CURSOR.fetchone()[0]
+        if fetch_start_day == "NULL":
+            CURSOR.execute(f"UPDATE history SET (particular_day_seconds, block_index, transaction_index, starting_date) = ({particular_day}, {block_index}, {transaction_index}, {fetch_start_day}) where particular_day_seconds = {stored_day};")
+        else:
+            CURSOR.execute(f"UPDATE history SET (particular_day_seconds, block_index, transaction_index, starting_date) = ({particular_day}, {block_index}, {transaction_index}, \'{fetch_start_day}\') where particular_day_seconds = {stored_day};")
+    CURSOR.close()
+    CONN.commit()
+    CONN.close()
 
 """
     DATABASE Functions
@@ -23,10 +35,12 @@ try:
 
     def appendMAIN_HASH(main_address, secondary_address_to_append, table_name = "main_hash"):
         CURSOR.execute("UPDATE "+table_name+" SET secondary_addresses = array_append(secondary_addresses,'" + secondary_address_to_append + "') WHERE main_address = '" + main_address + "';")
+        CONN.commit()
         
 
     def insertMAIN_HASH(main_address, secondary_address, table_name = "main_hash"):
         CURSOR.execute("""INSERT INTO main_hash VALUES (%s, ARRAY[%s]);""", (main_address, secondary_address))
+        CONN.commit()
 
         
     def existsSECONDARY_HASH(s_secondary_address, table_name = "secondary_hash"):
@@ -42,13 +56,19 @@ try:
 
     def insertSECONDARY_HASH(secondary_address, main_address, table_name = "secondary_hash"):
         CURSOR.execute("INSERT INTO " + table_name + " VALUES (\'" + secondary_address + "\', \'" + main_address + "\');")
+        CONN.commit()
 
         
 
-    global main_hash
-    main_hash = {}
-    global second_hash
-    second_hash = {}
+    global st_day
+    st_day = 0
+    global st_block
+    st_block = 0
+    global st_transaction
+    st_transaction = 0
+    global st_fetching_started_day
+    st_fetching_started_day = "NULL"
+    
 
 
     def handle_input(inputs):
@@ -174,29 +194,13 @@ try:
                 else:
                     final_outputs[found_index]["value"] = str(float(final_outputs[found_index]["value"]) + output["value"]/100000000)
 
-
-            # if "addr" in output:
-            #     if existsSECONDARY_HASH(output["addr"]):
-            #         addr = selectSECONDARY_HASH(output["addr"])
-            #         if addr != input:
-            #             if len(final_outputs) > 0:  # TODO verify correctness
-            #                 length_of_final_outputs = len(final_outputs)
-            #                 for el_index in range(length_of_final_outputs): # TODO modify the value summation logic
-            #                     if final_outputs[el_index]["addr"] == addr:
-            #                         final_outputs[el_index]["value"] = float(final_outputs[el_index]["value"]) + int(float(output["value"]))/100000000
-            #                         break
-            #                     else:
-            #                         final_outputs.append(
-            #                             {"value": str(output["value"]/100000000), "addr": str(addr)})
-            #             else:
-            #                 final_outputs.append(
-            #                     {"value": str(output["value"]/100000000), "addr": str(addr)})
-            #     else:
-            #         final_outputs.append(
-            #             {"value": str(int(float(output["value"]))/100000000), "addr": str(output["addr"])})
-
         return (final_outputs)
 
+
+    def fetch_config():
+        CURSOR.execute(f"select * from history limit 1;")
+        result = CURSOR.fetchone()
+        return result
 
     pastNDays = 1
 
@@ -206,24 +210,46 @@ try:
     sum_transactions = 0
 
     i_counter = 0
+    csv_counter = 0
+
+    starting_day, starting_block, starting_transaction, fetching_started_on_day = fetch_config()
+    st_fetching_started_day = fetching_started_on_day
+    if fetching_started_on_day != None:
+        diff = today - fetching_started_on_day
+        rvalue_day_inc = diff.days
+    else:
+        rvalue_day_inc = 0
+    print(f"starting_day = {starting_day}")
+    print(f"starting_block = {starting_block}")
+    print(f"starting_transaction = {starting_transaction}")    
+    print(f"fetching_started_on_day = {fetching_started_on_day}")
 
     print("fetchin data")
-    for day in range(pastNDays):
+    for day in range(starting_day + rvalue_day_inc, pastNDays + rvalue_day_inc):
+        st_day = day
         particular_day = int((datetime.datetime(
             today.year, today.month, today.day).timestamp() - (86400.0 * day)) * 1000)
         url = "https://blockchain.info/blocks/" + \
             str(particular_day) + "?format=json"
         blocks = (requests.get(url)).json()
         sum_hash += len(blocks)
-        for block in blocks:
-            # print(block["hash"])  # log
+
+        for block_i in range(starting_block, len(blocks)):
+            st_block = block_i
+            block = blocks[block_i]
+            b_log = block["hash"]
+            print(f"block =  {b_log}")  # log
             single_block = "https://blockchain.info/rawblock/" + str(block["hash"])
             single_block_res = (requests.get(single_block)).json()
             sum_transactions += (len(single_block_res["tx"]))
-            for each_transaction in single_block_res["tx"]:
+            
+            for each_transaction_i in range(starting_transaction + 1, len(single_block_res["tx"])):
+                st_transaction = each_transaction_i
                 # print("tx: " + str(each_transaction["hash"]))  # log
                 # parse through each transaction as we already have the transaction data fetched
+                each_transaction = single_block_res["tx"][each_transaction_i]
                 print(each_transaction["hash"])
+                
                 inputs = []
                 outputs = []
                 global simplified_inputs
@@ -258,51 +284,58 @@ try:
                                 print("\n\nNOTICE THIS\n=========\n")
                                 print(f"len(actual_transaction > output) = {length_of_each_transaction_output})  VS  len(final_output) = {len(outputs)}")
 
-                    # print(len(outputs))
-
-                    # for out in each_transaction["out"]:
-                    #     if "addr" in out:
-                    #         to_insert_output = True
-                    #         outputs.append(
-                    #             {"value": (out["value"] / 100000000), "addr": out["addr"]})
+                   
                     if to_insert_input and to_insert_output and outputs != None:
-                        for output in outputs:
-                            # no self loops
-                            if simplified_inputs != output["addr"]:
-                                # dict = {"hash": each_transaction["hash"], "time": each_transaction["time"], "sender": simplified_inputs, "receiver": output["addr"], "value": output["value"]}
-
+                        # dict = {"hash": each_transaction["hash"], "time": each_transaction["time"], "sender": simplified_inputs, "receiver": output["addr"], "value": output["value"]}
                         # dict = {"hash": each_transaction["hash"],"time": each_transaction["time"], "sender":inputs, "receivers":outputs}
-                        # if each_transaction["hash"] == "293a5e6c0eea9ed493c5982f638b15b9d669d1c5304424024f7c1a04f605b429":
-
+                        for output in outputs:
+                            if simplified_inputs != output["addr"]:
                                 # print(json.dumps(dict))
                                 # print("\n--------\n")
-                                with open("/Volumes/My Backup/JOEL/transactions_apr_14_2022.csv", "a") as f:
+                                with open("/Volumes/My Backup/JOEL/test.csv", "a") as f:
                                     writer = csv.writer(f)
                                     writer.writerow([each_transaction["hash"], each_transaction["time"],
                                                     simplified_inputs, output["addr"], output["value"]])
                                 f.close()
-
-
+                                csv_counter += 1 
                         i_counter += 1
                         print(f"# {i_counter}")
-                                # if i_counter >= 500:
-                                #     # closing steps
-                                #     # TODO close connection to postgresql database
-                                #     CURSOR.close()
-                                #     CONN.commit()
-                                #     CONN.close()
-                                #     quit()
+                        if csv_counter >= 60000:
+                            # closing steps
+                            print("60,000 data fetched")
+                            if st_fetching_started_day == None:
+                                st_fetching_started_day = today = datetime.datetime.now().date()
+                            shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
+                            # CURSOR.close()
+                            # CONN.commit()
+                            # CONN.close()
+                            print("done storing data")
+                            print(sum_hash)
+                            quit()
+                
+            
         print(f"\n================\nDay {day} Complete!\n================\n")
 
 
     print("done fetching data")
-    CURSOR.close()
-    CONN.commit()
-    CONN.close()
+    # CURSOR.close()
+    # CONN.commit()
+    # CONN.close()
+    shutdown_gracefully(True, 0, 0, 0, "NULL")
     print("done storing data")
     print(sum_hash)
 except Exception as e:
-    print("\n=================\nEXCEPTION CAUGHT!  ==> " + str(e))
+    print("\n=================\nEXCEPTION CAUGHT! ==> " + str(e))
+
+    print(f"EXCEPT @ starting_day = {starting_day}")
+    print(f"EXCEPT @ starting_block = {starting_block}")
+    print(f"EXCEPT @ starting_transaction = {starting_transaction}")
+
+    if st_day != 0 and st_block != 0 and st_transaction != 0:
+        if st_fetching_started_day == None:
+            st_fetching_started_day = today = datetime.datetime.now().date()
+        shutdown_gracefully(True, st_day, st_block, st_day, st_fetching_started_day)
+
     CURSOR.close()
     CONN.commit()
     CONN.close()
