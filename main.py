@@ -7,7 +7,7 @@ import csv
 """
     database connection
 """
-CONN = psycopg2.connect(database="test",
+CONN = psycopg2.connect(database="cse640",
                         host="127.0.0.1", port="5400")
 print("Opened database successfully")
 CURSOR = CONN.cursor()
@@ -226,7 +226,7 @@ try:
 
     print("fetchin data")
     for day in range(starting_day + rvalue_day_inc, pastNDays + rvalue_day_inc):
-        st_day = day
+        st_day = day - rvalue_day_inc
         particular_day = int((datetime.datetime(
             today.year, today.month, today.day).timestamp() - (86400.0 * day)) * 1000)
         url = "https://blockchain.info/blocks/" + \
@@ -292,7 +292,7 @@ try:
                             if simplified_inputs != output["addr"]:
                                 # print(json.dumps(dict))
                                 # print("\n--------\n")
-                                with open("/Volumes/My Backup/JOEL/test.csv", "a") as f:
+                                with open("/Volumes/My Backup/JOEL/transactions.csv", "a") as f:
                                     writer = csv.writer(f)
                                     writer.writerow([each_transaction["hash"], each_transaction["time"],
                                                     simplified_inputs, output["addr"], output["value"]])
@@ -300,9 +300,9 @@ try:
                                 csv_counter += 1 
                         i_counter += 1
                         print(f"# {i_counter}")
-                        if csv_counter >= 60000:
+                        if csv_counter >= 50000:
                             # closing steps
-                            print("60,000 data fetched")
+                            print("50,000 data fetched")
                             if st_fetching_started_day == None:
                                 st_fetching_started_day = today = datetime.datetime.now().date()
                             shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
