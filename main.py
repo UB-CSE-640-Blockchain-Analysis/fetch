@@ -254,7 +254,7 @@ try:
                 outputs = []
                 global simplified_inputs
                 simplified_inputs = None
-                if len(each_transaction["inputs"]) > 0:
+                if len(each_transaction["inputs"]) > 0 and len(each_transaction["inputs"]) <= 500: # TODO
                     to_insert_input = False
                     to_insert_output = False
                     for input in each_transaction["inputs"]:
@@ -292,7 +292,7 @@ try:
                             if simplified_inputs != output["addr"]:
                                 # print(json.dumps(dict))
                                 # print("\n--------\n")
-                                with open("/Volumes/My Backup/JOEL/transactions.csv", "a") as f:
+                                with open("/Volumes/My Backup/JOEL/transactions_apr_27_2022.csv", "a") as f:
                                     writer = csv.writer(f)
                                     writer.writerow([each_transaction["hash"], each_transaction["time"],
                                                     simplified_inputs, output["addr"], output["value"]])
@@ -300,7 +300,7 @@ try:
                                 csv_counter += 1 
                         i_counter += 1
                         print(f"# {i_counter}")
-                        if csv_counter >= 50000:
+                        if csv_counter >= 50000: # TODO remove from final version to fetch all data
                             # closing steps
                             print("50,000 data fetched")
                             if st_fetching_started_day == None:
@@ -312,6 +312,7 @@ try:
                             print("done storing data")
                             print(sum_hash)
                             quit()
+                            
                 
             
         print(f"\n================\nDay {day} Complete!\n================\n")
@@ -324,21 +325,39 @@ try:
     shutdown_gracefully(True, 0, 0, 0, "NULL")
     print("done storing data")
     print(sum_hash)
-except Exception as e:
-    print("\n=================\nEXCEPTION CAUGHT! ==> " + str(e))
+except SystemExit:
+    print()
+except KeyboardInterrupt:
+    print("\n=================\nEXCEPTION CAUGHT! " )
 
-    print(f"EXCEPT @ starting_day = {starting_day}")
-    print(f"EXCEPT @ starting_block = {starting_block}")
-    print(f"EXCEPT @ starting_transaction = {starting_transaction}")
+    print(f"EXCEPT @ starting_day = {st_day}")
+    print(f"EXCEPT @ starting_block = {st_block}")
+    print(f"EXCEPT @ starting_transaction = {st_transaction}")
 
-    if st_day != 0 and st_block != 0 and st_transaction != 0:
+    if st_day != 0 or st_block != 0 or st_transaction != 0:
         if st_fetching_started_day == None:
             st_fetching_started_day = today = datetime.datetime.now().date()
-        shutdown_gracefully(True, st_day, st_block, st_day, st_fetching_started_day)
+        shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
 
-    CURSOR.close()
-    CONN.commit()
-    CONN.close()
+    # CURSOR.close()
+    # CONN.commit()
+    # CONN.close()
+# except KeyboardInterrupt:
+#     print("\n=================\nEXCEPTION CAUGHT! ==> KeyBoardInterrupt " )
+
+#     print(f"EXCEPT @ starting_day = {st_day}")
+#     print(f"EXCEPT @ starting_block = {st_block}")
+#     print(f"EXCEPT @ starting_transaction = {st_transaction}")
+
+#     if st_day != 0 or st_block != 0 or st_transaction != 0:
+#         if st_fetching_started_day == None:
+#             st_fetching_started_day = today = datetime.datetime.now().date()
+#         shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
+
+#     CURSOR.close()
+#     CONN.commit()
+#     CONN.close()
+
 
 
 """
