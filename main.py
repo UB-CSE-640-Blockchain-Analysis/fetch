@@ -4,6 +4,25 @@ import datetime
 import psycopg2
 import csv
 
+import argparse
+
+parser = argparse.ArgumentParser(description="Fetch Bitcoin Transactions")
+parser.add_argument('--log', default=False, action=argparse.BooleanOptionalAction, help="Print logs? If this flag is not used, no info. about txs will be printed.")
+parser.add_argument("--m_txs", dest="m_txs", type=int, nargs=1, help="Fetch M transactions.")
+parser.add_argument('--n_days', default=1, help="Fetch past N days' transactions. Will be overrided by --m_txs. (default: 1)")
+parser.add_argument("--l_in_size", dest="l_in_size", type=int, nargs=1, help="Limit size of SENDERS handled for faster fetching, but skipping some txs.")
+parser.add_argument("--l_out_size", dest="l_out_size", type=int, nargs=1, help="Limit size of RECEIVERS handled for faster fetching, but skipping some txs.")
+args = parser.parse_args()
+
+print(f"log = {args.log}")
+if args.m_txs:
+    print(f"m_txs = {args.m_txs[0]}")
+print(f"n_days = {args.n_days}")
+if args.l_in_size:
+    print(f"l_in_size = {args.l_in_size[0]}")
+if args.l_out_size:
+    print(f"l_out_size = {args.l_out_size[0]}")
+
 """
     database connection
 """
@@ -135,17 +154,16 @@ try:
         # return r
 
 
-    def handle_output(outputs, input):
+    def handle_output(outputs, input, each_tx_hash):
         final_outputs = []
         # print(f"length of outputs = {len(outputs)}")
-        if len(outputs) > 1200:  # TODO more ram required for this
+        limit_output = False
+        if args.l_out_size:
+            limit_output = len(outputs) > args.l_out_size[0]
+        if limit_output:
             return None
-        # i_counter = 1
 
         for output in outputs:
-            # print(f"i = {i_counter}")
-            # i_counter += 1
-
             # compare output with input
             # compare secondary_hash's main_address with input
             # if not equal > then 
@@ -181,6 +199,9 @@ try:
                 if addr == input:
                     continue
 
+                if not existsMAIN_HASH(addr):
+                    insertMAIN_HASH(addr, None) # insert new row in main_hash
+                    
                 not_in = True
                 found_index = 0
                 for f_index in range(len(final_outputs)):
@@ -202,7 +223,7 @@ try:
         result = CURSOR.fetchone()
         return result
 
-    pastNDays = 1
+    pastNDays = args.n_days
 
     today = datetime.datetime.now().date()
 
@@ -238,23 +259,25 @@ try:
             st_block = block_i
             block = blocks[block_i]
             b_log = block["hash"]
-            print(f"block =  {b_log}")  # log
+            if args.log: print(f"block =  {b_log}")  # log
             single_block = "https://blockchain.info/rawblock/" + str(block["hash"])
             single_block_res = (requests.get(single_block)).json()
             sum_transactions += (len(single_block_res["tx"]))
             
             for each_transaction_i in range(starting_transaction + 1, len(single_block_res["tx"])):
                 st_transaction = each_transaction_i
-                # print("tx: " + str(each_transaction["hash"]))  # log
-                # parse through each transaction as we already have the transaction data fetched
                 each_transaction = single_block_res["tx"][each_transaction_i]
-                print(each_transaction["hash"])
+                if args.log: print("tx: " + str(each_transaction["hash"]))  # log
+                # parse through each transaction as we already have the transaction data fetched
                 
                 inputs = []
                 outputs = []
                 global simplified_inputs
                 simplified_inputs = None
-                if len(each_transaction["inputs"]) > 0 and len(each_transaction["inputs"]) <= 500: # TODO
+                limit_input = True
+                if args.l_in_size:
+                    limit_input = (len(each_transaction["inputs"]) <= args.l_in_size[0])
+                if len(each_transaction["inputs"]) > 0 and limit_input:
                     to_insert_input = False
                     to_insert_output = False
                     for input in each_transaction["inputs"]:
@@ -262,21 +285,13 @@ try:
                             to_insert_input = True
                             inputs.append({"value": (
                                 input["prev_out"]["value"] / 100000000), "addr": input["prev_out"]["addr"]})
-                            # print(each_transaction)
-                            # exit()
                             simplified_inputs = handle_input(
                                 each_transaction["inputs"])
-                            # print(
-                            #     f"\n\nmain_hash = {main_hash}\n\nsecond_hash = {second_hash}\n\n")
-                            # quit()
-                            # print("\n\n\n\n")
-                            # print(each_transaction["inputs"])
-                            # print("\n\n\n\n")
 
                     if simplified_inputs != None:
                         to_insert_output = True
                         # print(each_transaction["hash"])
-                        outputs = handle_output(each_transaction["out"], simplified_inputs)
+                        outputs = handle_output(each_transaction["out"], simplified_inputs, each_transaction["hash"])
                         length_of_each_transaction_output = len(each_transaction["out"])
                         # print(f"len(actual_transaction > output) = {length_of_each_transaction_output})  VS  len(final_output) = {len(outputs)}")
                         if outputs != None:
@@ -290,28 +305,24 @@ try:
                         # dict = {"hash": each_transaction["hash"],"time": each_transaction["time"], "sender":inputs, "receivers":outputs}
                         for output in outputs:
                             if simplified_inputs != output["addr"]:
-                                # print(json.dumps(dict))
-                                # print("\n--------\n")
-                                with open("/Volumes/My Backup/JOEL/transactions_apr_27_2022.csv", "a") as f:
+                                with open("/Volumes/My Backup/JOEL/transactions_may_04_2022.csv", "a") as f:
                                     writer = csv.writer(f)
                                     writer.writerow([each_transaction["hash"], each_transaction["time"],
                                                     simplified_inputs, output["addr"], output["value"]])
                                 f.close()
                                 csv_counter += 1 
                         i_counter += 1
-                        print(f"# {i_counter}")
-                        if csv_counter >= 50000: # TODO remove from final version to fetch all data
-                            # closing steps
-                            print("50,000 data fetched")
-                            if st_fetching_started_day == None:
-                                st_fetching_started_day = today = datetime.datetime.now().date()
-                            shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
-                            # CURSOR.close()
-                            # CONN.commit()
-                            # CONN.close()
-                            print("done storing data")
-                            print(sum_hash)
-                            quit()
+                        if args.log: print(f"# {i_counter}")
+                        if args.m_txs:
+                            if csv_counter >= args.m_txs[0]:
+                                # closing steps
+                                print(str(args.m_txs[0]) + " data fetched")
+                                if st_fetching_started_day == None:
+                                    st_fetching_started_day = today = datetime.datetime.now().date()
+                                shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
+                                print("done storing data")
+                                print(sum_hash)
+                                quit()
                             
                 
             
@@ -319,9 +330,6 @@ try:
 
 
     print("done fetching data")
-    # CURSOR.close()
-    # CONN.commit()
-    # CONN.close()
     shutdown_gracefully(True, 0, 0, 0, "NULL")
     print("done storing data")
     print(sum_hash)
@@ -339,24 +347,6 @@ except KeyboardInterrupt:
             st_fetching_started_day = today = datetime.datetime.now().date()
         shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
 
-    # CURSOR.close()
-    # CONN.commit()
-    # CONN.close()
-# except KeyboardInterrupt:
-#     print("\n=================\nEXCEPTION CAUGHT! ==> KeyBoardInterrupt " )
-
-#     print(f"EXCEPT @ starting_day = {st_day}")
-#     print(f"EXCEPT @ starting_block = {st_block}")
-#     print(f"EXCEPT @ starting_transaction = {st_transaction}")
-
-#     if st_day != 0 or st_block != 0 or st_transaction != 0:
-#         if st_fetching_started_day == None:
-#             st_fetching_started_day = today = datetime.datetime.now().date()
-#         shutdown_gracefully(True, st_day, st_block, st_transaction, st_fetching_started_day)
-
-#     CURSOR.close()
-#     CONN.commit()
-#     CONN.close()
 
 
 
