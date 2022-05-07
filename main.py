@@ -1,10 +1,10 @@
 import requests
-import json
 import datetime
 import psycopg2
 import csv
-
 import argparse
+import os
+from dotenv import load_dotenv, find_dotenv
 
 parser = argparse.ArgumentParser(description="Fetch Bitcoin Transactions")
 parser.add_argument('--log', default=False, action=argparse.BooleanOptionalAction, help="Print logs? If this flag is not used, no info. about txs will be printed.")
@@ -12,6 +12,7 @@ parser.add_argument("--m_txs", dest="m_txs", type=int, nargs=1, help="Fetch M tr
 parser.add_argument('--n_days', default=1, help="Fetch past N days' transactions. Will be overrided by --m_txs. (default: 1)")
 parser.add_argument("--l_in_size", dest="l_in_size", type=int, nargs=1, help="Limit size of SENDERS handled for faster fetching, but skipping some txs.")
 parser.add_argument("--l_out_size", dest="l_out_size", type=int, nargs=1, help="Limit size of RECEIVERS handled for faster fetching, but skipping some txs.")
+parser.add_argument("--file_name", dest="file_name", type=str, nargs=1, help="Name of the output file. Omit .csv in terminal. (default: transactions.csv)")
 args = parser.parse_args()
 
 print(f"log = {args.log}")
@@ -22,12 +23,26 @@ if args.l_in_size:
     print(f"l_in_size = {args.l_in_size[0]}")
 if args.l_out_size:
     print(f"l_out_size = {args.l_out_size[0]}")
+if args.file_name:
+    print(f"file_name = {args.file_name[0]}")
+
+"""
+    loading environment variables
+"""
+load_dotenv(find_dotenv())
+DB_NAME = os.getenv("DB_NAME")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DIR_PATH = os.getenv("DIR_PATH")
+if (None in [DB_NAME, DB_HOST, DB_PORT, DIR_PATH]):
+    print("!! environment not setup properly !!\n!! please check it manually !!\n!! then retry !!")
+    quit()
 
 """
     database connection
 """
-CONN = psycopg2.connect(database="cse640",
-                        host="127.0.0.1", port="5400")
+CONN = psycopg2.connect(database=DB_NAME,
+                        host=DB_HOST, port=DB_PORT)
 print("Opened database successfully")
 CURSOR = CONN.cursor()
 
@@ -303,9 +318,13 @@ try:
                     if to_insert_input and to_insert_output and outputs != None:
                         # dict = {"hash": each_transaction["hash"], "time": each_transaction["time"], "sender": simplified_inputs, "receiver": output["addr"], "value": output["value"]}
                         # dict = {"hash": each_transaction["hash"],"time": each_transaction["time"], "sender":inputs, "receivers":outputs}
+                        if args.file_name:
+                            file_name = args.file_name[0]
+                        else:
+                            file_name = "transactions"
                         for output in outputs:
                             if simplified_inputs != output["addr"]:
-                                with open("/Volumes/My Backup/JOEL/transactions_may_04_2022.csv", "a") as f:
+                                with open(DIR_PATH + file_name + ".csv", "a") as f:
                                     writer = csv.writer(f)
                                     writer.writerow([each_transaction["hash"], each_transaction["time"],
                                                     simplified_inputs, output["addr"], output["value"]])
