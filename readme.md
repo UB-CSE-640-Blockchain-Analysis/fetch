@@ -42,7 +42,7 @@ Scripts to fetch *confirmed* Bitcoin transactions and store them in a csv file.
   - Name of the Postgres database you want. (default: cse640)
   - Database access URL. (default: 127.0.0.1)
   - Database access port number. (default: 5432)
-- This will setup the Postgres server and appropriately create a .env file.
+- This will setup the Postgres database and appropriately create a .env file.
 
 <br />
 
