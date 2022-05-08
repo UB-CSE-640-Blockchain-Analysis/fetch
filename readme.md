@@ -36,6 +36,7 @@ Scripts to fetch *confirmed* Bitcoin transactions and store them in a csv file.
 - Install dependencies using `pip` command.
 
 **Step 3**:
+- Make sure that the postgres server is running.
 - Run `python utils/setup.py` from root of the repository.
 - Enter following neccessary information:
   - *Absolute path* to the destination where transactions will be stored.
