@@ -19,6 +19,7 @@ CREATE TABLE "history" (
   "starting_date" date
 );
 
+-- to export tables to csv files use following
 COPY secondary_hash TO '{destination_directory}/inverse_users.csv'  WITH DELIMITER ',' CSV HEADER;
 COPY main_hash TO '{destination_directory}/users.csv'  WITH DELIMITER ',' CSV HEADER;
 
