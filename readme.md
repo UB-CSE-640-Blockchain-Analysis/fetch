@@ -1,6 +1,6 @@
 # Fetch Transactions
 
-Scripts to fetch "confirmed" Bitcoin transactions and store them in a csv file.
+Scripts to fetch *confirmed* Bitcoin transactions and store them in a csv file.
 
 <br />
 
