@@ -13,6 +13,7 @@ Scripts to fetch *confirmed* Bitcoin transactions and store them in a csv file.
 - argparse
 - os
 - dotenv
+- [non-python] PostgreSQL installed locally.
 
 <br />
 
